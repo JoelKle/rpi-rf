@@ -5,8 +5,7 @@ Sending and receiving 433/315Mhz signals with low-cost GPIO RF Modules on a Rasp
 import logging
 import time
 from collections import namedtuple
-
-from RPi import GPIO
+from gpiozero import DigitalOutputDevice
 
 MAX_CHANGES = 67
 
@@ -56,7 +55,6 @@ class RFDevice:
         self.rx_bitlength = None
         self.rx_pulselength = None
 
-        GPIO.setmode(GPIO.BCM)
         _LOGGER.debug("Using GPIO " + str(gpio))
 
     def cleanup(self):
@@ -66,7 +64,6 @@ class RFDevice:
         if self.rx_enabled:
             self.disable_rx()
         _LOGGER.debug("Cleanup")
-        GPIO.cleanup()
 
     def enable_tx(self):
         """Enable TX, set up GPIO."""
@@ -75,7 +72,7 @@ class RFDevice:
             return False
         if not self.tx_enabled:
             self.tx_enabled = True
-            GPIO.setup(self.gpio, GPIO.OUT)
+            self.tx_device = DigitalOutputDevice(self.gpio)
             _LOGGER.debug("TX enabled")
         return True
 
@@ -83,7 +80,7 @@ class RFDevice:
         """Disable TX, reset GPIO."""
         if self.tx_enabled:
             # set up GPIO pin as input for safety
-            GPIO.setup(self.gpio, GPIO.IN)
+            self.tx_device.close()
             self.tx_enabled = False
             _LOGGER.debug("TX disabled")
         return True
@@ -172,9 +169,9 @@ class RFDevice:
         if not self.tx_enabled:
             _LOGGER.error("TX is not enabled, not sending data")
             return False
-        GPIO.output(self.gpio, GPIO.HIGH)
+        self.tx_device.on()
         self._sleep((highpulses * self.tx_pulselength) / 1000000)
-        GPIO.output(self.gpio, GPIO.LOW)
+        self.tx_device.off()
         self._sleep((lowpulses * self.tx_pulselength) / 1000000)
         return True
 
@@ -185,22 +182,21 @@ class RFDevice:
             return False
         if not self.rx_enabled:
             self.rx_enabled = True
-            GPIO.setup(self.gpio, GPIO.IN)
-            GPIO.add_event_detect(self.gpio, GPIO.BOTH)
-            GPIO.add_event_callback(self.gpio, self.rx_callback)
+            self.rx_device = DigitalOutputDevice(self.gpio)
+            self.rx_device.when_changed = self.rx_callback
             _LOGGER.debug("RX enabled")
         return True
 
     def disable_rx(self):
         """Disable RX, remove GPIO event detection."""
         if self.rx_enabled:
-            GPIO.remove_event_detect(self.gpio)
+            self.rx_device.close()
             self.rx_enabled = False
             _LOGGER.debug("RX disabled")
         return True
 
     # pylint: disable=unused-argument
-    def rx_callback(self, gpio):
+    def rx_callback(self):
         """RX callback for GPIO event detection. Handle basic signal detection."""
         timestamp = int(time.perf_counter() * 1000000)
         duration = timestamp - self._rx_last_timestamp
@@ -232,7 +228,7 @@ class RFDevice:
 
         for i in range(1, change_count, 2):
             if (abs(self._rx_timings[i] - delay * PROTOCOLS[pnum].zero_high) < delay_tolerance and
-                abs(self._rx_timings[i+1] - delay * PROTOCOLS[pnum].zero_low) < delay_tolerance):
+                    abs(self._rx_timings[i+1] - delay * PROTOCOLS[pnum].zero_low) < delay_tolerance):
                 code <<= 1
             elif (abs(self._rx_timings[i] - delay * PROTOCOLS[pnum].one_high) < delay_tolerance and
                   abs(self._rx_timings[i+1] - delay * PROTOCOLS[pnum].one_low) < delay_tolerance):
@@ -250,8 +246,8 @@ class RFDevice:
             return True
 
         return False
-           
-    def _sleep(self, delay):      
+
+    def _sleep(self, delay):
         _delay = delay / 100
         end = time.time() + delay - _delay
         while time.time() < end:

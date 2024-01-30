@@ -39,7 +39,7 @@ Dependencies
 
 ::
 
-    RPi.GPIO
+    gpiozero
 
 Installation
 ------------

@@ -36,7 +36,7 @@ setup(
         '315',
         '315mhz'
     ],
-    install_requires=['RPi.GPIO'],
+    install_requires=['gpiozero'],
     scripts=['scripts/rpi-rf_send', 'scripts/rpi-rf_receive'],
     packages=find_packages(exclude=['contrib', 'docs', 'tests'])
 )
