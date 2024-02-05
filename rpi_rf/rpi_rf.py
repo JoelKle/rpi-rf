@@ -5,7 +5,7 @@ Sending and receiving 433/315Mhz signals with low-cost GPIO RF Modules on a Rasp
 import logging
 import time
 from collections import namedtuple
-from gpiozero import DigitalOutputDevice
+from gpiozero import DigitalOutputDevice, DigitalInputDevice
 
 MAX_CHANGES = 67
 
@@ -182,8 +182,8 @@ class RFDevice:
             return False
         if not self.rx_enabled:
             self.rx_enabled = True
-            self.rx_device = DigitalOutputDevice(self.gpio)
-            self.rx_device.when_changed = self.rx_callback
+            self.rx_device = DigitalInputDevice(self.gpio)
+            self.rx_device.when_activated = self.rx_callback
             _LOGGER.debug("RX enabled")
         return True
 
